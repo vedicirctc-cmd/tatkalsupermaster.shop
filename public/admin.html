@@ -1,1 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Tatkal Store</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { darkblack: '#090a0f', navycard: '#111827', navyaccent: '#1e293b' } } } }
+    </script>
+</head>
+<body class="bg-darkblack text-white p-6">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-blue-400">🛡️ Admin Dashboard</h1>
 
+        <!-- Settings Configuration (Support Link & Pay0) -->
+        <div class="bg-navycard border border-navyaccent p-5 rounded-xl mb-6">
+            <h2 class="text-lg font-bold mb-3 text-slate-200">Store Configurations & Support Link</h2>
+            <form id="settingsForm" onsubmit="saveSettings(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Help & Support Link (Telegram/WhatsApp)</label>
+                    <input type="text" id="supportLinkInput" required class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm text-white">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Pay0 Merchant ID</label>
+                    <input type="text" id="pay0MidInput" required class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm text-white">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-bold">Save Settings</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Add / Edit Products -->
+            <div class="bg-navycard border border-navyaccent p-5 rounded-xl">
+                <h2 id="formTitle" class="text-lg font-bold mb-3 text-slate-200">Add New Product</h2>
+                <form id="productForm" onsubmit="saveProduct(event)">
+                    <input type="hidden" id="editProductId">
+                    <div class="mb-3">
+                        <label class="block text-xs text-slate-400 mb-1">Product Name</label>
+                        <input type="text" id="prodName" required class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-slate-400 mb-1">Description</label>
+                        <textarea id="prodDesc" required class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm h-20"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Price (₹)</label>
+                            <input type="number" step="0.01" id="prodPrice" required class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Image URL</label>
+                            <input type="text" id="prodImage" class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-2 bg-green-600 hover:bg-green-500 rounded text-sm font-bold">Save Product</button>
+                </form>
+            </div>
+
+            <!-- Add Stock Credentials -->
+            <div class="bg-navycard border border-navyaccent p-5 rounded-xl">
+                <h2 class="text-lg font-bold mb-3 text-slate-200">Add Delivery Stock (Keys / IDs / Content)</h2>
+                <form onsubmit="addStock(event)">
+                    <div class="mb-3">
+                        <label class="block text-xs text-slate-400 mb-1">Select Product</label>
+                        <select id="stockProductSelect" required class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm text-white"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-slate-400 mb-1">Stock Content (One per item or raw format)</label>
+                        <textarea id="stockContent" required placeholder="User: pass or License Key" class="w-full bg-darkblack border border-navyaccent rounded p-2 text-sm h-28 font-mono"></textarea>
+                    </div>
+                    <button type="submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm font-bold">Add Stock</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Orders & UTR Tracking Table -->
+        <div class="bg-navycard border border-navyaccent p-5 rounded-xl">
+            <h2 class="text-lg font-bold mb-3 text-slate-200">Customer Orders & UTR Tracking History</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-navyaccent text-slate-300 uppercase">
+                        <tr>
+                            <th class="p-3">Order ID</th>
+                            <th class="p-3">Product</th>
+                            <th class="p-3">Email</th>
+                            <th class="p-3">UTR Number</th>
+                            <th class="p-3">Amount</th>
+                            <th class="p-3">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableBody" class="divide-y divide-navyaccent"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadAdminData() {
+            const res = await fetch('/api/admin/data');
+            const data = await res.json();
+            
+            // Populate settings
+            document.getElementById('supportLinkInput').value = data.settings.support_link || '';
+            document.getElementById('pay0MidInput').value = data.settings.pay0_merchant_id || '';
+
+            // Populate Product Select
+            const select = document.getElementById('stockProductSelect');
+            select.innerHTML = '';
+            data.products.forEach(p => {
+                select.innerHTML += `<option value="${p.id}">${p.name} (₹${p.price})</option>`;
+            });
+
+            // Populate Orders Table
+            const tbody = document.getElementById('ordersTableBody');
+            tbody.innerHTML = '';
+            data.orders.forEach(o => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-darkblack/50">
+                        <td class="p-3 font-mono text-blue-400">${o.order_id}</td>
+                        <td class="p-3">${o.product_name}</td>
+                        <td class="p-3">${o.user_email}</td>
+                        <td class="p-3 font-mono text-yellow-400 font-bold">${o.utr_number}</td>
+                        <td class="p-3">₹${o.amount}</td>
+                        <td class="p-3 text-slate-400">${o.created_at}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function saveProduct(e) {
+            e.preventDefault();
+            const payload = {
+                id: document.getElementById('editProductId').value,
+                name: document.getElementById('prodName').value,
+                description: document.getElementById('prodDesc').value,
+                price: document.getElementById('prodPrice').value,
+                image: document.getElementById('prodImage').value
+            };
+            await fetch('/api/admin/product/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            alert('Product saved!');
+            document.getElementById('productForm').reset();
+            document.getElementById('editProductId').value = '';
+            loadAdminData();
+        }
+
+        async function addStock(e) {
+            e.preventDefault();
+            const payload = {
+                product_id: document.getElementById('stockProductSelect').value,
+                content: document.getElementById('stockContent').value
+            };
+            await fetch('/api/admin/stock/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            alert('Stock added successfully!');
+            document.getElementById('stockContent').value = '';
+            loadAdminData();
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            const payload = {
+                support_link: document.getElementById('supportLinkInput').value,
+                pay0_merchant_id: document.getElementById('pay0MidInput').value
+            };
+            await fetch('/api/admin/settings/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            alert('Settings updated successfully!');
+            loadAdminData();
+        }
+
+        loadAdminData();
+    </script>
+</body>
+</html>
